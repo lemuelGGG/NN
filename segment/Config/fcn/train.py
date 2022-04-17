@@ -1,11 +1,12 @@
+from hmac import trans_36
 import os
 import time
 import datetime
 
 import torch
-
-from src import fcn_resnet50
-from train_utils import train_one_epoch, evaluate, create_lr_scheduler
+from config import train_set
+from seg.fcn.fcn_model import fcn_resnet50
+from Config.train_utils import train_one_epoch, evaluate, create_lr_scheduler
 from my_dataset import VOCSegmentation
 import transforms as T
 from torch.utils.tensorboard import SummaryWriter
@@ -56,7 +57,7 @@ def create_model(aux, num_classes, pretrain=True):
     model = fcn_resnet50(aux=aux, num_classes=num_classes)
 
     if pretrain:
-        weights_dict = torch.load("/home/llm/data/pretraining/fcn/fcn_resnet50_coco.pth", map_location='cpu')
+        weights_dict = torch.load(train_set.init_model, map_location=train_set.device)
 
         if num_classes != 21:
             # 官方提供的预训练权重是21类(包括背景)
@@ -78,7 +79,7 @@ def create_model(aux, num_classes, pretrain=True):
 def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     # device = 'cpu'
-    batch_size = args.batch_size
+    batch_size = train_set.batch_size
     # segmentation nun_classes + background
     num_classes = args.num_classes + 1
 
@@ -86,13 +87,13 @@ def main(args):
     results_file = "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
     # VOCdevkit -> VOC2012 -> ImageSets -> Segmentation -> train.txt
-    train_dataset = VOCSegmentation(args.data_path,
+    train_dataset = VOCSegmentation(train_set.dataset,
                                     year="2012",
                                     transforms=get_transform(train=True),
                                     txt_name="train.txt")
 
     # VOCdevkit -> VOC2012 -> ImageSets -> Segmentation -> val.txt
-    val_dataset = VOCSegmentation(args.data_path,
+    val_dataset = VOCSegmentation(train_set.dataset,
                                   year="2012",
                                   transforms=get_transform(train=False),
                                   txt_name="val.txt")
@@ -188,15 +189,15 @@ def parse_args():
     import argparse
     parser = argparse.ArgumentParser(description="pytorch fcn training")
 
-    parser.add_argument("--data-path", default="/home/llm/data/voc", help="VOCdevkit root")
+    parser.add_argument("--data-path", default=train_set.dataset, help="VOCdevkit root")
     parser.add_argument("--num-classes", default=20, type=int)
     parser.add_argument("--aux", default=True, type=bool, help="auxilier loss")
-    parser.add_argument("--device", default="cpu", help="training device")
-    parser.add_argument("-b", "--batch-size", default=4, type=int)
+    parser.add_argument("--device", default=train_set.device, help="training device")
+    parser.add_argument("-b", "--batch-size", default=train_set.batch_size, type=int)
     parser.add_argument("--epochs", default=30, type=int, metavar="N",
                         help="number of total epochs to train")
 
-    parser.add_argument('--lr', default=0.001, type=float, help='initial learning rate')
+    parser.add_argument('--lr', default=train_set.initLr, type=float, help='initial learning rate')
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                         help='momentum')
     parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
